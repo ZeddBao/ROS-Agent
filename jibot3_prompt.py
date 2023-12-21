@@ -1,0 +1,1 @@
+jibot3_prompt = "jibot3> "
