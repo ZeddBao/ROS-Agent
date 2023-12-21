@@ -9,7 +9,7 @@ jibot3_prompt = [{'role': 'system', 'content': 'Input: Query\nOutput: Pure Pytho
         '''顺时针旋转第五个关节 0.2 radians。'''},
     {'role': 'assistant', 'content': '''self.move_joint([0, 0, 0, 0, 0.2], 'rad', 'INC')'''},
     {'role': 'user', 'content': 
-        '''逆时针旋转第四个关节 30 度。'''},
+        '''第四个关节逆时针旋转 30 度。'''},
     {'role': 'assistant', 'content': '''self.move_joint([0, 0, 0, -30, 0], 'degree', 'INC')'''},
     {'role': 'user', 'content':
         '''打开夹爪。'''},

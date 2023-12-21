@@ -1,11 +1,13 @@
 import sys
 import os
+from typing import Any
 
 import rospy
 import rosgraph
 import moveit_commander
 from gazebo_msgs.srv import SpawnModel, GetModelState
 from geometry_msgs.msg import Pose
+from std_msgs.msg import String
 from openai import OpenAI
 
 from api import api_key, base_url
@@ -48,6 +50,16 @@ class AgentBase():
                 break
             response = self.get_code_response(query)
             self.execute(response.content)
+
+    def listen(self):
+        rospy.Subscriber('recognized_speech', String, callback)
+        # 保持python程序运行，直到节点被停止
+        rospy.spin()
+    
+    def callback(self, data):
+        rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
+        response = self.get_code_response(data.data)
+        self.execute(response.content)
 
     def chat(self):
         while True:
@@ -165,37 +177,39 @@ class Jibot3Agent(AgentBase):
         self.arm_group = moveit_commander.MoveGroupCommander('arm')
         self.gripper_group = moveit_commander.MoveGroupCommander('gripper')
     
-    def move_joint(self, joint_goal_rad, degree_rad: str, mode: str):
+    def move_joint(self, joint_goal_input, degree_rad: str, mode: str):
         # robot = moveit_commander.RobotCommander()
         # scene = moveit_commander.PlanningSceneInterface()
         if degree_rad not in ["degree", "rad"]:
             raise ValueError("The second argument 'degree_rad' should be 'degree' or 'rad'.")
         if mode not in ['INC', 'ABS']:
             raise ValueError("The second argument 'mode' should be 'INC' or 'ABS'.")
-        if max(joint_goal_rad) > 3.14 or min(joint_goal_rad) < -3.14:
-            raise ValueError("Each element of the first argument 'joint_goal_rad' should be in range [-3.14, 3.14].")
+        if degree_rad == 'rad' and (max(joint_goal_input) > 3.14 or min(joint_goal_input) < -3.14):
+            raise ValueError("Each element of the first argument 'joint_goal_rad' should be in range [-3.14, 3.14] if 'degree_rad' is 'rad'.")
+        if degree_rad == 'degree' and (max(joint_goal_input) > 180 or min(joint_goal_input) < -180):
+            raise ValueError("Each element of the first argument 'joint_goal_rad' should be in range [-180, 180] if 'degree_rad' is 'degree'.")
         
         if degree_rad == "degree":
-            joint_goal_rad = [i * 3.14 / 180 for i in joint_goal_rad]
+            joint_goal_input = [i * 3.14 / 180 for i in joint_goal_input]
 
         joint_goal = self.get_joint_values()
         previous_joints = joint_goal
         rospy.loginfo("Joint values before moving: " + str(joint_goal))
         if mode == 'INC':
-            joint_goal[0] += joint_goal_rad[0]
-            joint_goal[1] += joint_goal_rad[1]
-            joint_goal[2] -= joint_goal_rad[2]
-            joint_goal[3] += joint_goal_rad[3]
-            joint_goal[4] += joint_goal_rad[4]
+            joint_goal[0] += joint_goal_input[0]
+            joint_goal[1] += joint_goal_input[1]
+            joint_goal[2] -= joint_goal_input[2]
+            joint_goal[3] += joint_goal_input[3]
+            joint_goal[4] += joint_goal_input[4]
         elif mode == 'ABS':
-            joint_goal[0] = joint_goal_rad[0]
-            joint_goal[1] = joint_goal_rad[1]
-            joint_goal[2] = joint_goal_rad[2]
-            joint_goal[3] = joint_goal_rad[3]
-            joint_goal[4] = joint_goal_rad[4]
+            joint_goal[0] = joint_goal_input[0]
+            joint_goal[1] = joint_goal_input[1]
+            joint_goal[2] = joint_goal_input[2]
+            joint_goal[3] = joint_goal_input[3]
+            joint_goal[4] = joint_goal_input[4]
 
         self.arm_group.go(joint_goal, wait=True)
-        self.arm_group.stop()  # 调用stop()确保没有剩余的移动
+        # self.arm_group.stop()  # 调用stop()确保没有剩余的移动
 
         current_joints = self.get_joint_values()
         rospy.loginfo("Joint values after moving: " + str(current_joints))
