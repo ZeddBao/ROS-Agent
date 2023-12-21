@@ -1,8 +1,10 @@
 import sys
+import os
 
 import rospy
+import rosgraph
 import moveit_commander
-from gazebo_msgs.srv import SpawnModel
+from gazebo_msgs.srv import SpawnModel, GetModelState
 from geometry_msgs.msg import Pose
 from openai import OpenAI
 
@@ -11,6 +13,7 @@ from debug_prompt import debug_prompt
 from code_prompt import code_prompt
 from chat_prompt import chat_prompt
 from gazebo_prompt import gazebo_prompt
+from jibot3_prompt import jibot3_prompt
 
 class AgentBase():
     def __init__(self, name='agent_base', model='gpt-3.5-turbo'):
@@ -34,6 +37,9 @@ class AgentBase():
 
     def init_node(self):
         rospy.init_node(self.name)
+
+    def load_prompt(self, prompt):
+        self.code_prompt = prompt
 
     def run(self):
         while not rospy.is_shutdown():
@@ -72,9 +78,9 @@ class AgentBase():
 
     def execute(self, code: str):
         try:
-            rospy.loginfo(self.name + ': \n' + code)
+            rospy.loginfo(self.name + ': \n```python\n' + code + '\n```')
             exec(code)
-            rospy.loginfo(self.name + ': Done!')
+            rospy.loginfo(self.name + ': Done!' + '\n')
             return 0, None
         except Exception as e:
             rospy.logwarn('Terminal: ' + str(e))
@@ -101,8 +107,7 @@ class GazeboAgent(AgentBase):
         super().__init__(name=name, model=model)
         self.code_prompt = gazebo_prompt
         self.spawn_model = rospy.ServiceProxy('/gazebo/spawn_urdf_model', SpawnModel)
-        self.arm_group = moveit_commander.MoveGroupCommander('arm')
-        self.gripper_group = moveit_commander.MoveGroupCommander('gripper')
+        self.get_model_state = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
 
 
     def init_node(self, service_name='/gazebo/spawn_urdf_model'):
@@ -112,19 +117,66 @@ class GazeboAgent(AgentBase):
         rospy.loginfo('Service ' + service_name + ' is ready!')
         moveit_commander.roscpp_initialize(sys.argv)
 
+    def save_sdf(self, sdf: str, model_name: str):
+        # 如果sdf文件夹不存在则创建
+        if not os.path.exists('sdf'):
+            os.makedirs('sdf')
+        with open(f'sdf/{model_name}.sdf', 'w') as f:
+            f.write(sdf)
+
+    def spawm_cube(self, position, model_name: str, model_size = 0.1, model_mass = 0.1):
+        cube_sdf = f"""
+<sdf version='1.6'>
+  <model name='{model_name}'>
+    <pose>0 0 0 0 0 0</pose> <!-- X Y Z Roll Pitch Yaw -->
+    <link name='link'>
+      <inertial>
+        <mass>{model_mass}</mass>
+      </inertial>
+      <collision name='collision'>
+        <geometry>
+          <box>
+            <size>{model_size} {model_size} {model_size}</size> <!-- 正方体的尺寸 -->
+          </box>
+        </geometry>
+      </collision>
+      <visual name='visual'>
+        <geometry>
+          <box>
+            <size>{model_size} {model_size} {model_size}</size> <!-- 正方体的尺寸 -->
+          </box>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>
+"""
+        pose = Pose()
+        pose.position.x = position[0]
+        pose.position.y = position[1]
+        pose.position.z = position[2]
+
+        self.spawm_model(model_name, cube_sdf, pose, 'world')
+
 class Jibot3Agent(AgentBase):
     def __init__(self, name='jibot3_agent', model='gpt-3.5-turbo'):
         super().__init__(name=name, model=model)
         self.code_prompt = jibot3_prompt
+        self.arm_group = moveit_commander.MoveGroupCommander('arm')
+        self.gripper_group = moveit_commander.MoveGroupCommander('gripper')
     
-    def move_joint_rad(self, joint_goal_rad, mode):
+    def move_joint(self, joint_goal_rad, degree_rad: str, mode: str):
         # robot = moveit_commander.RobotCommander()
         # scene = moveit_commander.PlanningSceneInterface()
-
+        if degree_rad not in ["degree", "rad"]:
+            raise ValueError("The second argument 'degree_rad' should be 'degree' or 'rad'.")
         if mode not in ['INC', 'ABS']:
             raise ValueError("The second argument 'mode' should be 'INC' or 'ABS'.")
         if max(joint_goal_rad) > 3.14 or min(joint_goal_rad) < -3.14:
             raise ValueError("Each element of the first argument 'joint_goal_rad' should be in range [-3.14, 3.14].")
+        
+        if degree_rad == "degree":
+            joint_goal_rad = [i * 3.14 / 180 for i in joint_goal_rad]
 
         joint_goal = self.get_joint_values()
         previous_joints = joint_goal
@@ -132,7 +184,7 @@ class Jibot3Agent(AgentBase):
         if mode == 'INC':
             joint_goal[0] += joint_goal_rad[0]
             joint_goal[1] += joint_goal_rad[1]
-            joint_goal[2] += joint_goal_rad[2]
+            joint_goal[2] -= joint_goal_rad[2]
             joint_goal[3] += joint_goal_rad[3]
             joint_goal[4] += joint_goal_rad[4]
         elif mode == 'ABS':
@@ -168,6 +220,18 @@ class Jibot3Agent(AgentBase):
 
         # 清理moveit_commander
         # moveit_commander.roscpp_shutdown()
+
+    def move_to(self, pose: str):
+        if pose == "straight":
+            self.arm_group.set_named_target("arm_default")
+        elif pose == "default":
+            self.arm_group.set_named_target("arm_zero")
+        else:
+            rospy.loginfo("Invalid command to arm. Use 'straight' or 'default'.")
+            raise ValueError("The second argument 'pose' should be 'straight' or 'default'.")
+
+        self.arm_group.go(wait=True)
+        self.arm_group.stop()
 
 
     def move_to_cartesian_pose(self, cartesian_pose, mode):
@@ -226,10 +290,14 @@ class Jibot3Agent(AgentBase):
         # moveit_commander.roscpp_shutdown()
 
     def get_cartesian_pose(self):
-        return self.arm_group.get_current_pose().pose
+        pose = self.arm_group.get_current_pose().pose
+        rospy.loginfo("Pose: " + str(pose))
+        return pose
     
     def get_joint_values(self):
-        return self.arm_group.get_current_joint_values()
+        joint_values = self.arm_group.get_current_joint_values()
+        rospy.loginfo("Joint values: " + str(joint_values))
+        return joint_values
 
 
 if __name__ == '__main__':
