@@ -51,15 +51,15 @@ class AgentBase():
             response = self.get_code_response(query)
             self.execute(response.content)
 
-    def listen(self):
-        rospy.Subscriber('recognized_speech', String, callback)
-        # 保持python程序运行，直到节点被停止
-        rospy.spin()
-    
     def callback(self, data):
         rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
         response = self.get_code_response(data.data)
         self.execute(response.content)
+
+    def listen(self):
+        rospy.Subscriber('recognized_speech', String, self.callback)
+        # 保持python程序运行，直到节点被停止
+        rospy.spin()
 
     def chat(self):
         while True:
