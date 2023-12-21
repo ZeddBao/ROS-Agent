@@ -1,13 +1,11 @@
 import sys
 import os
-from typing import Any
 
 import rospy
 import rosgraph
 import moveit_commander
 from gazebo_msgs.srv import SpawnModel, GetModelState
 from geometry_msgs.msg import Pose
-from std_msgs.msg import String
 from openai import OpenAI
 
 from api import api_key, base_url
@@ -50,16 +48,6 @@ class AgentBase():
                 break
             response = self.get_code_response(query)
             self.execute(response.content)
-
-    def callback(self, data):
-        rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
-        response = self.get_code_response(data.data)
-        self.execute(response.content)
-
-    def listen(self):
-        rospy.Subscriber('recognized_speech', String, self.callback)
-        # 保持python程序运行，直到节点被停止
-        rospy.spin()
 
     def chat(self):
         while True:
@@ -136,26 +124,25 @@ class GazeboAgent(AgentBase):
         with open(f'sdf/{model_name}.sdf', 'w') as f:
             f.write(sdf)
 
-    def spawm_cube(self, position, model_name: str, model_size = 0.1, model_mass = 0.1):
-        cube_sdf = f"""
-<sdf version='1.6'>
-  <model name='{model_name}'>
-    <pose>0 0 0 0 0 0</pose> <!-- X Y Z Roll Pitch Yaw -->
+    def spawn_cube(self, position, model_name: str, model_size = 0.1, model_mass = 0.1):
+        cube_sdf = """<sdf version='1.6'>
+  <model name='my_cube'>
+    <pose>0 0 0.015 0 0 0</pose> <!-- X Y Z Roll Pitch Yaw -->
     <link name='link'>
       <inertial>
-        <mass>{model_mass}</mass>
+        <mass>0.1</mass>
       </inertial>
       <collision name='collision'>
         <geometry>
           <box>
-            <size>{model_size} {model_size} {model_size}</size> <!-- 正方体的尺寸 -->
+            <size>0.03 0.03 0.03</size> <!-- 正方体的尺寸 -->
           </box>
         </geometry>
       </collision>
       <visual name='visual'>
         <geometry>
           <box>
-            <size>{model_size} {model_size} {model_size}</size> <!-- 正方体的尺寸 -->
+            <size>0.03 0.03 0.03</size> <!-- 正方体的尺寸 -->
           </box>
         </geometry>
       </visual>
@@ -163,12 +150,12 @@ class GazeboAgent(AgentBase):
   </model>
 </sdf>
 """
+        print(cube_sdf)
         pose = Pose()
         pose.position.x = position[0]
         pose.position.y = position[1]
         pose.position.z = position[2]
-
-        self.spawm_model(model_name, cube_sdf, pose, 'world')
+        self.spawn_model(model_name, cube_sdf, "", pose, 'world')
 
 class Jibot3Agent(AgentBase):
     def __init__(self, name='jibot3_agent', model='gpt-3.5-turbo'):
