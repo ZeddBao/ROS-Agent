@@ -6,6 +6,7 @@ import rosgraph
 import moveit_commander
 from gazebo_msgs.srv import SpawnModel, GetModelState
 from geometry_msgs.msg import Pose
+from std_msgs.msg import String
 from openai import OpenAI
 
 from api import api_key, base_url
