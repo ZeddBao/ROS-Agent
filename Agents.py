@@ -16,6 +16,7 @@ from code_prompt import code_prompt
 from chat_prompt import chat_prompt
 from gazebo_prompt import gazebo_prompt
 from jibot3_prompt import jibot3_prompt
+from sdf.SDFCreator import SDFCreator
 
 class AgentBase():
     def __init__(self, name='agent_base', model='gpt-3.5-turbo'):
@@ -52,13 +53,14 @@ class AgentBase():
             self.execute(response.content)
 
     def callback(self, data):
-        rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
+        rospy.loginfo(rospy.get_caller_id() + "@recognized_speech: %s", data.data)
         response = self.get_code_response(data.data)
         self.execute(response.content)
 
     def listen(self):
         rospy.Subscriber('recognized_speech', String, self.callback)
         # 保持python程序运行，直到节点被停止
+        rospy.loginfo('Listening for speech...')
         rospy.spin()
 
     def chat(self):
@@ -118,57 +120,36 @@ class GazeboAgent(AgentBase):
     def __init__(self, name='gazebo_agent', model='gpt-3.5-turbo'):
         super().__init__(name=name, model=model)
         self.code_prompt = gazebo_prompt
-        self.spawn_model = rospy.ServiceProxy('/gazebo/spawn_urdf_model', SpawnModel)
+        self.spawn_sdf_model = rospy.ServiceProxy('/gazebo/spawn_sdf_model', SpawnModel)
+        self.spawn_urdf_model = rospy.ServiceProxy('/gazebo/spawn_urdf_model', SpawnModel)
         self.get_model_state = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
+        self.sdf = SDFCreator()
 
-
-    def init_node(self, service_name='/gazebo/spawn_urdf_model'):
+    def init_node(self):
         super().init_node()
-        rospy.loginfo('Waiting for service ' + service_name)
-        rospy.wait_for_service(service_name)
-        rospy.loginfo('Service ' + service_name + ' is ready!')
+        rospy.loginfo('Waiting for service ...')
+        rospy.wait_for_service('/gazebo/spawn_sdf_model')
+        rospy.wait_for_service('/gazebo/spawn_urdf_model')
+        rospy.loginfo('Service ready!')
         moveit_commander.roscpp_initialize(sys.argv)
 
-    def save_sdf(self, sdf: str, model_name: str):
+    def save_sdf(self, sdf_str: str, model_name: str):
         # 如果sdf文件夹不存在则创建
         if not os.path.exists('sdf'):
             os.makedirs('sdf')
         with open(f'sdf/{model_name}.sdf', 'w') as f:
-            f.write(sdf)
+            f.write(sdf_str)
 
-    def spawm_cube(self, position, model_name: str, model_size = 0.1, model_mass = 0.1):
-        cube_sdf = f"""
-<sdf version='1.6'>
-  <model name='{model_name}'>
-    <pose>0 0 0 0 0 0</pose> <!-- X Y Z Roll Pitch Yaw -->
-    <link name='link'>
-      <inertial>
-        <mass>{model_mass}</mass>
-      </inertial>
-      <collision name='collision'>
-        <geometry>
-          <box>
-            <size>{model_size} {model_size} {model_size}</size> <!-- 正方体的尺寸 -->
-          </box>
-        </geometry>
-      </collision>
-      <visual name='visual'>
-        <geometry>
-          <box>
-            <size>{model_size} {model_size} {model_size}</size> <!-- 正方体的尺寸 -->
-          </box>
-        </geometry>
-      </visual>
-    </link>
-  </model>
-</sdf>
-"""
+    def spawn_cube(self, position, model_name: str, model_size = 0.1, model_mass = 0.1):
+        
+        cube_sdf = self.sdf.create_cube(model_size, model_mass)
+
         pose = Pose()
         pose.position.x = position[0]
         pose.position.y = position[1]
         pose.position.z = position[2]
 
-        self.spawm_model(model_name, cube_sdf, pose, 'world')
+        self.spawn_sdf_model(model_name, cube_sdf, '', pose, 'world')
 
 class Jibot3Agent(AgentBase):
     def __init__(self, name='jibot3_agent', model='gpt-3.5-turbo'):
@@ -317,4 +298,4 @@ class Jibot3Agent(AgentBase):
 if __name__ == '__main__':
     agent = AgentBase()
     agent.init_node()
-    agent.run()
+    agent.listen()
