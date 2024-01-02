@@ -1,5 +1,5 @@
 from Agents import Jibot3Agent
-from jibot3_prompt import jibot3_prompt
+from prompt_examples.jibot3_prompt import jibot3_prompt
 
 robot = Jibot3Agent()
 # robot.load_prompt(jibot3_prompt)

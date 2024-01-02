@@ -9,12 +9,12 @@ from geometry_msgs.msg import Pose
 from std_msgs.msg import String
 from openai import OpenAI
 
-from api import api_key, base_url
-from debug_prompt import debug_prompt
-from code_prompt import code_prompt
-from chat_prompt import chat_prompt
-from gazebo_prompt import gazebo_prompt
-from jibot3_prompt import jibot3_prompt
+from api_config import api_key, base_url
+from prompt_examples.debug_prompt import debug_prompt
+from prompt_examples.code_prompt import code_prompt
+from prompt_examples.chat_prompt import chat_prompt
+from prompt_examples.gazebo_prompt import gazebo_prompt
+from prompt_examples.jibot3_prompt import jibot3_prompt
 from sdf.SDFCreator import SDFCreator
 
 class AgentBase():
