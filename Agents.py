@@ -10,11 +10,7 @@ from std_msgs.msg import String
 from openai import OpenAI
 
 from api_config import api_key, base_url
-from prompt_examples.debug_prompt import debug_prompt
-from prompt_examples.code_prompt import code_prompt
-from prompt_examples.chat_prompt import chat_prompt
-from prompt_examples.gazebo_prompt import gazebo_prompt
-from prompt_examples.jibot3_prompt import jibot3_prompt
+from prompt_examples import debug_prompt, code_prompt, chat_prompt, gazebo_prompt, jibot3_prompt
 from sdf.SDFCreator import SDFCreator
 
 class AgentBase():

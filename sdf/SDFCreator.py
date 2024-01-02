@@ -1,8 +1,8 @@
 import os
 import sys
 
-script_path = os.path.abspath(__file__)
-parent_dir = os.path.dirname(script_path)
+current_path = os.path.abspath(__file__)
+parent_dir = os.path.dirname(current_path)
 
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)

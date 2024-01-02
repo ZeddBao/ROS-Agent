@@ -30,7 +30,7 @@ Agent 框架还包括了记忆存储功能，可以分为短期记忆和长期�
 ## 项目视频展示
 
 <video width="480" height="360" controls>
-  <source src="./doc/基于大语言模型的智能机器人控制系统.mp4" type="video/mp4">
+  <source src="./docs/基于大语言模型的智能机器人控制系统.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
